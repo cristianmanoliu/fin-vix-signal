@@ -1,71 +1,56 @@
 # fin-vix-signal
 
-BTC EMA-cross → VIX call options. Cross-asset volatility timing.
+BTC EMA-cross signal applied to VIX call contracts. Cross-asset volatility timing.
 
-## Origin
+## Background
 
-Spike finding from `fin-trading-engine` (2026-08-19). The perp-futures project
-ran 85 trials, all killed by cost geometry (fees on notional × implied leverage
-= 114% of gross). The EMA 9/21 bearish-cross signal is real (corr −0.588 vs
-BTC, structurally long-crash) but cannot clear costs on perps.
+This project started as a spike in `fin-trading-engine` on 2026-08-19. That project ran 85 perp-futures trials. `honesty()` rejected all of them because fees on notional, multiplied by implied leverage, totaled 114% of gross. The EMA 9/21 bearish-cross signal is correct (corr -0.588 vs BTC, structurally long-crash). It does not have sufficient gross to pay costs on perps.
 
-Options eliminate the cost trap structurally: max loss = premium, L=1×, fee =
-0.28% of risk. The spike found that BTC's bearish EMA cross → VIX calls is the
-only expression that works — equity puts (SPY/QQQ) and equity-signal → VIX
-calls are both dead.
+VIX call contracts remove the cost problem. Max loss is the premium. Leverage is 1x. Fee is 0.28% of risk. The spike found that the BTC bearish EMA cross into VIX calls is the only expression that works. SPY and QQQ puts, and the equity-signal-to-VIX-calls variant, the two fail.
 
 ## Spike result (throwaway code, not pre-registered)
 
-- **50 trades, 2015–2026, t=+1.64, mean +0.726R, 36% WR**
+- 50 trades, 2015 to 2026, t=+1.64, mean +0.726R, 36% win rate
 - Survives drop-top-5% (+0.255R after removing top 2 trades)
-- Beats random entry (15.2% of random sims match or exceed)
-- SPY's own EMA → VIX calls is dead (−0.295R) — edge is in BTC timing
-- Best hold period: 10d (t=+2.15), but this is a fitted parameter
-- Breaks at IV-of-VIX > 1.00 (when you're buying expensive vol during stress)
+- Beats random entry (15.2% of random simulations score more than this result)
+- SPY's own EMA cross into VIX calls fails (-0.295R). The edge is in BTC timing.
+- Best hold period is 10 days (t=+2.15), but this is a parameter chosen after the results.
+- The edge disappears at IV-of-VIX above 1.00 (when you buy expensive vol during stress).
 
 Full write-up: `fin-trading-engine/results/spike_vix_calls_btc_signal_2026-08-19.md`
 
-## Before any code — the method (in order)
+## Before code, do these steps in sequence
 
-From `fin-trading-engine/docs/QUANT_METHOD.md`. Cheapest disqualifier first:
+These steps come from `fin-trading-engine/docs/QUANT_METHOD.md`. Do the cheapest disqualifier first.
 
-1. **Venue access.** Confirm IBKR allows VIX option trading from Romania. Place
-   one small trade by hand. An afternoon.
-2. **Real option data.** Get historical VIX option chains (CBOE or IBKR) to
-   validate the premium model against actual bid/ask at entry timestamps. The
-   spike used a Black-Scholes ATM approximation — real premiums are higher
-   during stress (which is when the signal fires).
-3. **Pre-register.** Lock: hold period (10d or 21d — pick ONE before looking at
-   real-data results), IV threshold, accept/reject criteria. One trial, no
-   parameter shopping.
-4. **Honest backtest** with real premiums. Run `honesty()` — median,
-   drop-top-5%, by-year.
-5. **Overfit gate.** N=1 trial if pre-registered correctly (no DSR concern yet).
-6. Only then: write the engine.
+1. **Venue access.** Make sure that IBKR permits VIX contract trading from Romania. Put one small trade in by hand. This takes one afternoon.
+2. **Actual contract data.** Get historical VIX contract chains from CBOE or IBKR. Use them to validate the premium model against actual bid/ask prices at entry times. The spike used a Black-Scholes ATM approximation. Actual premiums are higher during stress, which is the time the signal fires.
+3. **Pre-register.** Lock the hold period (10 days or 21 days, pick one before you see actual-data results), the IV threshold, and the accept/reject criteria. Run one trial. Do not change the parameters after you see results.
+4. **Honest backtest.** Use actual premiums. Run `honesty()`. Examine the median, the drop-top-5%, and the by-year results.
+5. **Overfit gate.** N=1 trial when pre-registered correctly. No Deflated Sharpe ratio concern at this point.
+6. Write the engine only after step 5 passes.
 
-## Key risks
+## Primary risks
 
-- **IV-of-VIX spikes during stress** — you're buying expensive vol exactly when
-  the signal fires. The spike shows edge vanishes at IV > 1.00. This is the
-  main risk and the first thing to validate with real data.
-- **50 trades / 11 years** — below 63-trade power floor. May need 2012+ data
-  or accept forward-testing.
-- **VIX option settlement** — European-style, settles to SOQ, not spot VIX.
-  The spike used spot VIX payoffs (overstates).
-- **10d hold is fitted** — pre-register it or use 21d (the unfitted default).
+**IV-of-VIX spikes during stress.** You buy expensive vol at the same time the signal fires. The spike shows the edge disappears at IV above 1.00. This is the primary risk. It is the first thing to validate with actual data.
+
+**Low trade count.** 50 trades in 11 years is below the 63-trade power floor. It is possibly necessary to get data from 2012 or earlier, or accept a forward-test period.
+
+**VIX contract settlement.** VIX contracts are European-style. They pay out to SOQ, not to the VIX index value. The spike used VIX-index payoffs, which overstates the result.
+
+**Parameter chosen after results.** The 10-day hold period was set after looking at results. Pre-register it, or use 21 days as the unfitted default.
 
 ## Portable tools from fin-trading-engine
 
-Copy these into this project when ready:
-- `scripts/quant_honesty.py` — `screen()` + `honesty()` with `--selftest`
-- `scripts/backtest_overfit_analysis.py` — PBO/CSCV + Deflated Sharpe
+Get these scripts when you are at step 4.
+
+- `scripts/quant_honesty.py`: `screen()` and `honesty()` with `--selftest`
+- `scripts/backtest_overfit_analysis.py`: PBO/CSCV and Deflated Sharpe
 
 ## Venue
 
-IBKR (operator has an account). VIX options are CBOE-listed, traded via IBKR.
-EU/Romania access needs verification (Step 1).
+The operator has an IBKR account. VIX contracts are CBOE-listed and traded through IBKR. EU/Romania access requires verification (see step 1 above).
 
 ## Capital
 
-$100k–$300k available. At 1 contract per signal (~$500 premium per trade),
-capital is not the constraint — signal frequency is (~4.2 trades/year).
+$100,000 to $300,000 is available. At one contract for each signal (about $500 premium for each trade), capital is not the constraint. Signal frequency is the constraint (about 4.2 trades for each year).
